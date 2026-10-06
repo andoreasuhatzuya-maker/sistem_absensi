@@ -7,12 +7,12 @@ from flask_login import (
     LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 )
 from werkzeug.security import generate_password_hash, check_password_hash
-from werkzeug.utils import secure_filename
 from datetime import date, datetime, time, timedelta
-from sqlalchemy import or_
+from sqlalchemy import event, or_, text, UniqueConstraint, Index
+from sqlalchemy.engine import Engine
+from sqlalchemy.orm import joinedload
 from io import BytesIO
 import os
-import shutil
 import uuid
 
 from reportlab.lib import colors
@@ -41,9 +41,23 @@ os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
 
 db = SQLAlchemy(app)
 
+
+@event.listens_for(Engine, "connect")
+def aktifkan_foreign_key_sqlite(dbapi_connection, connection_record):
+    """SQLite tidak menyalakan foreign key secara default."""
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA foreign_keys=ON")
+    cursor.close()
+
 login_manager = LoginManager(app)
 login_manager.login_view = "login"
 login_manager.login_message = "Silakan login terlebih dahulu."
+
+
+@app.errorhandler(413)
+def file_terlalu_besar(error):
+    flash("Ukuran file melebihi batas maksimal 10 MB.", "error")
+    return redirect(request.referrer or url_for("pengajuan"))
 
 
 # ============================================================
@@ -57,6 +71,11 @@ class Admin(UserMixin, db.Model):
 
 
 class Karyawan(db.Model):
+    __table_args__ = (
+        Index("ix_karyawan_nama", "nama"),
+        Index("ix_karyawan_status_aktif", "status_aktif"),
+    )
+
     id = db.Column(db.Integer, primary_key=True)
     nik = db.Column(db.String(20), unique=True, nullable=False)
     nama = db.Column(db.String(100), nullable=False)
@@ -69,8 +88,14 @@ class Karyawan(db.Model):
 
 
 class Absensi(db.Model):
+    __table_args__ = (
+        UniqueConstraint("karyawan_id", "tanggal", name="uq_absensi_karyawan_tanggal"),
+        Index("ix_absensi_tanggal", "tanggal"),
+        Index("ix_absensi_status", "status"),
+    )
+
     id = db.Column(db.Integer, primary_key=True)
-    karyawan_id = db.Column(db.Integer, db.ForeignKey("karyawan.id"), nullable=False)
+    karyawan_id = db.Column(db.Integer, db.ForeignKey("karyawan.id", ondelete="RESTRICT"), nullable=False)
     tanggal = db.Column(db.Date, nullable=False)
     jam_masuk = db.Column(db.Time)
     jam_pulang = db.Column(db.Time)
@@ -82,8 +107,12 @@ class Absensi(db.Model):
 
 
 class Lembur(db.Model):
+    __table_args__ = (
+        UniqueConstraint("absensi_id", name="uq_lembur_absensi"),
+    )
+
     id = db.Column(db.Integer, primary_key=True)
-    absensi_id = db.Column(db.Integer, db.ForeignKey("absensi.id"), nullable=False)
+    absensi_id = db.Column(db.Integer, db.ForeignKey("absensi.id", ondelete="CASCADE"), nullable=False)
     jam_mulai = db.Column(db.Time)
     jam_selesai = db.Column(db.Time)
     total_jam = db.Column(db.Float)
@@ -91,14 +120,24 @@ class Lembur(db.Model):
 
 
 class Pengajuan(db.Model):
+    __table_args__ = (
+        UniqueConstraint("karyawan_id", "tanggal", name="uq_pengajuan_karyawan_tanggal"),
+        UniqueConstraint("absensi_id", name="uq_pengajuan_absensi"),
+        Index("ix_pengajuan_tanggal", "tanggal"),
+        Index("ix_pengajuan_status", "status"),
+    )
+
     id = db.Column(db.Integer, primary_key=True)
-    karyawan_id = db.Column(db.Integer, db.ForeignKey("karyawan.id"), nullable=False)
+    karyawan_id = db.Column(db.Integer, db.ForeignKey("karyawan.id", ondelete="RESTRICT"), nullable=False)
+    absensi_id = db.Column(db.Integer, db.ForeignKey("absensi.id", ondelete="SET NULL"))
     tanggal = db.Column(db.Date, nullable=False)
     jenis = db.Column(db.String(20), nullable=False)
     alasan = db.Column(db.Text, nullable=False)
     bukti = db.Column(db.String(255))
     status = db.Column(db.String(20), default="Disetujui")
     keterangan_admin = db.Column(db.Text)
+
+    absensi_terkait = db.relationship("Absensi", foreign_keys=[absensi_id])
 
 
 @login_manager.user_loader
@@ -175,7 +214,9 @@ def hitung_rekap(data):
 
 
 def absensi_untuk_laporan(tanggal_mulai, tanggal_selesai):
-    return Absensi.query.filter(
+    return Absensi.query.options(
+        joinedload(Absensi.karyawan), joinedload(Absensi.lembur)
+    ).filter(
         Absensi.tanggal >= tanggal_mulai,
         Absensi.tanggal <= tanggal_selesai
     ).order_by(Absensi.tanggal.asc(), Absensi.karyawan_id.asc()).all()
@@ -313,15 +354,23 @@ def edit_karyawan(id):
 
     if request.method == "POST":
         nik = request.form.get("nik", "").strip()
+        nama = request.form.get("nama", "").strip()
+        jabatan = request.form.get("jabatan", "").strip()
+        departemen = request.form.get("departemen", "").strip()
+        if not nik or not nama or not jabatan:
+            return render_template(
+                "edit_karyawan.html", karyawan=karyawan_obj,
+                error="NIK, nama, dan jabatan wajib diisi."
+            )
         duplikat = Karyawan.query.filter(Karyawan.nik == nik, Karyawan.id != id).first()
         if duplikat:
             return render_template("edit_karyawan.html", karyawan=karyawan_obj,
                                    error="NIK tersebut sudah digunakan karyawan lain.")
 
         karyawan_obj.nik = nik
-        karyawan_obj.nama = request.form.get("nama", "").strip()
-        karyawan_obj.jabatan = request.form.get("jabatan", "").strip()
-        karyawan_obj.departemen = request.form.get("departemen", "").strip()
+        karyawan_obj.nama = nama
+        karyawan_obj.jabatan = jabatan
+        karyawan_obj.departemen = departemen
         db.session.commit()
         flash("Data karyawan berhasil diperbarui.", "success")
         return redirect(url_for("karyawan"))
@@ -556,7 +605,9 @@ def hapus_absensi(id):
 @app.route("/pengajuan")
 @login_required
 def pengajuan():
-    daftar = Pengajuan.query.order_by(Pengajuan.tanggal.desc(), Pengajuan.id.desc()).all()
+    daftar = Pengajuan.query.options(joinedload(Pengajuan.karyawan)).order_by(
+        Pengajuan.tanggal.desc(), Pengajuan.id.desc()
+    ).all()
     return render_template("pengajuan.html", daftar_pengajuan=daftar)
 
 
@@ -708,12 +759,6 @@ def tambah_pengajuan():
             status="Disetujui"
         )
 
-        db.session.add(pengajuan_baru)
-
-        # =========================
-        # OTOMATIS MASUK KE ABSENSI
-        # =========================
-
         absensi_baru = Absensi(
             karyawan_id=int(karyawan_id),
             tanggal=tanggal_obj,
@@ -722,6 +767,9 @@ def tambah_pengajuan():
         )
 
         db.session.add(absensi_baru)
+        db.session.flush()
+        pengajuan_baru.absensi_id = absensi_baru.id
+        db.session.add(pengajuan_baru)
 
         db.session.commit()
 
@@ -828,31 +876,29 @@ def edit_pengajuan(id):
                 error="Tanggal tidak valid."
             )
 
-        # =========================
-        # CEK DUPLIKAT ABSENSI
-        # =========================
+        # Gunakan relasi eksplisit agar absensi lama tetap ditemukan saat
+        # karyawan atau tanggal pengajuan diubah.
+        absensi_terkait = pengajuan_obj.absensi_terkait
+        if not absensi_terkait:
+            absensi_terkait = Absensi.query.filter_by(
+                karyawan_id=pengajuan_obj.karyawan_id,
+                tanggal=pengajuan_obj.tanggal,
+                status=pengajuan_obj.jenis,
+            ).first()
 
-        absensi_lama = Absensi.query.filter(
-            Absensi.karyawan_id == int(karyawan_id),
-            Absensi.tanggal == tanggal_obj
+        absensi_di_tujuan = Absensi.query.filter_by(
+            karyawan_id=int(karyawan_id),
+            tanggal=tanggal_obj,
         ).first()
-
-        # Jangan anggap absensi milik pengajuan ini sebagai duplikat
-        if absensi_lama:
-
-            pengajuan_absensi = (
-                absensi_lama.status == pengajuan_obj.jenis
-                and absensi_lama.karyawan_id == pengajuan_obj.karyawan_id
-                and absensi_lama.tanggal == pengajuan_obj.tanggal
+        if absensi_di_tujuan and (
+            not absensi_terkait or absensi_di_tujuan.id != absensi_terkait.id
+        ):
+            return render_template(
+                "edit_pengajuan.html",
+                pengajuan=pengajuan_obj,
+                daftar_karyawan=daftar_karyawan,
+                error="Karyawan tersebut sudah memiliki absensi pada tanggal tersebut."
             )
-
-            if not pengajuan_absensi:
-                return render_template(
-                    "edit_pengajuan.html",
-                    pengajuan=pengajuan_obj,
-                    daftar_karyawan=daftar_karyawan,
-                    error="Karyawan tersebut sudah memiliki absensi pada tanggal tersebut."
-                )
 
         # =========================
         # UPLOAD BUKTI BARU
@@ -921,40 +967,29 @@ def edit_pengajuan(id):
         # UPDATE PENGAJUAN
         # =========================
 
+        if absensi_terkait:
+            absensi_terkait.karyawan_id = int(karyawan_id)
+            absensi_terkait.tanggal = tanggal_obj
+            absensi_terkait.status = jenis
+            absensi_terkait.keterangan = alasan
+            absensi_terkait.jam_masuk = None
+            absensi_terkait.jam_pulang = None
+        else:
+            absensi_terkait = Absensi(
+                karyawan_id=int(karyawan_id),
+                tanggal=tanggal_obj,
+                status=jenis,
+                keterangan=alasan,
+            )
+            db.session.add(absensi_terkait)
+            db.session.flush()
+
         pengajuan_obj.karyawan_id = int(karyawan_id)
         pengajuan_obj.tanggal = tanggal_obj
         pengajuan_obj.jenis = jenis
         pengajuan_obj.alasan = alasan
         pengajuan_obj.bukti = nama_file
-
-        # =========================
-        # UPDATE ABSENSI TERKAIT
-        # =========================
-
-        absensi_terkait = Absensi.query.filter_by(
-            karyawan_id=pengajuan_obj.karyawan_id,
-            tanggal=pengajuan_obj.tanggal
-        ).first()
-
-        if absensi_terkait:
-
-            absensi_terkait.status = jenis
-            absensi_terkait.keterangan = alasan
-
-            # Sakit / Izin tidak punya jam masuk
-            absensi_terkait.jam_masuk = None
-            absensi_terkait.jam_pulang = None
-
-        else:
-
-            db.session.add(
-                Absensi(
-                    karyawan_id=int(karyawan_id),
-                    tanggal=tanggal_obj,
-                    status=jenis,
-                    keterangan=alasan
-                )
-            )
+        pengajuan_obj.absensi_id = absensi_terkait.id
 
         db.session.commit()
 
@@ -974,6 +1009,49 @@ def edit_pengajuan(id):
     )
 
 
+@app.route("/pengajuan/<int:id>/bukti")
+@login_required
+def lihat_bukti(id):
+    pengajuan_obj = db.session.get(Pengajuan, id)
+    if not pengajuan_obj or not pengajuan_obj.bukti:
+        return "Bukti tidak ditemukan", 404
+    return send_from_directory(app.config["UPLOAD_FOLDER"], pengajuan_obj.bukti)
+
+
+@app.route("/pengajuan/<int:id>/bukti/download")
+@login_required
+def download_bukti(id):
+    pengajuan_obj = db.session.get(Pengajuan, id)
+    if not pengajuan_obj or not pengajuan_obj.bukti:
+        return "Bukti tidak ditemukan", 404
+    return send_from_directory(
+        app.config["UPLOAD_FOLDER"], pengajuan_obj.bukti, as_attachment=True
+    )
+
+
+@app.route("/pengajuan/hapus/<int:id>", methods=["POST"])
+@login_required
+def hapus_pengajuan(id):
+    pengajuan_obj = db.session.get(Pengajuan, id)
+    if not pengajuan_obj:
+        return "Data pengajuan tidak ditemukan", 404
+
+    nama_file = pengajuan_obj.bukti
+    db.session.delete(pengajuan_obj)
+    db.session.commit()
+
+    if nama_file:
+        lokasi_file = os.path.join(app.config["UPLOAD_FOLDER"], nama_file)
+        if os.path.isfile(lokasi_file):
+            try:
+                os.remove(lokasi_file)
+            except OSError:
+                pass
+
+    flash("Pengajuan dihapus. Catatan absensi tetap tersimpan.", "success")
+    return redirect(url_for("pengajuan"))
+
+
 # ============================================================
 # LEMBUR
 # ============================================================
@@ -981,7 +1059,9 @@ def edit_pengajuan(id):
 @app.route("/lembur")
 @login_required
 def lembur():
-    daftar = Lembur.query.order_by(Lembur.id.desc()).all()
+    daftar = Lembur.query.options(
+        joinedload(Lembur.absensi).joinedload(Absensi.karyawan)
+    ).order_by(Lembur.id.desc()).all()
     total_jam = round(sum((item.total_jam or 0) for item in daftar), 2)
     return render_template("lembur.html", daftar_lembur=daftar, total_jam=total_jam)
 
@@ -1204,9 +1284,118 @@ def pengaturan():
 # INIT DATABASE
 # ============================================================
 
-with app.app_context():
+
+def siapkan_skema_database():
+    """Migrasi ringan dan idempoten untuk database instalasi lama."""
+    with db.engine.begin() as koneksi:
+        tabel = {
+            row[0]
+            for row in koneksi.execute(text(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            ))
+        }
+
+        if "pengajuan" in tabel:
+            kolom_pengajuan = {
+                row[1] for row in koneksi.execute(text("PRAGMA table_info(pengajuan)"))
+            }
+            if "absensi_id" not in kolom_pengajuan:
+                koneksi.execute(text("ALTER TABLE pengajuan ADD COLUMN absensi_id INTEGER"))
+
     db.create_all()
+
+    with db.engine.begin() as koneksi:
+        duplikat_absensi = koneksi.execute(text("""
+            SELECT karyawan_id, tanggal
+            FROM absensi
+            GROUP BY karyawan_id, tanggal
+            HAVING COUNT(*) > 1
+            LIMIT 1
+        """)).first()
+        duplikat_lembur = koneksi.execute(text("""
+            SELECT absensi_id
+            FROM lembur
+            GROUP BY absensi_id
+            HAVING COUNT(*) > 1
+            LIMIT 1
+        """)).first()
+        duplikat_pengajuan = koneksi.execute(text("""
+            SELECT karyawan_id, tanggal
+            FROM pengajuan
+            GROUP BY karyawan_id, tanggal
+            HAVING COUNT(*) > 1
+            LIMIT 1
+        """)).first()
+
+        if duplikat_absensi or duplikat_lembur or duplikat_pengajuan:
+            raise RuntimeError(
+                "Database memiliki data duplikat. Buat backup lalu rapikan data sebelum aplikasi dijalankan."
+            )
+
+        # Hubungkan pengajuan lama dengan record absensi yang dibuat bersamanya.
+        koneksi.execute(text("""
+            UPDATE pengajuan
+            SET absensi_id = (
+                SELECT a.id
+                FROM absensi AS a
+                WHERE a.karyawan_id = pengajuan.karyawan_id
+                  AND a.tanggal = pengajuan.tanggal
+                  AND a.status = pengajuan.jenis
+                LIMIT 1
+            )
+            WHERE absensi_id IS NULL
+        """))
+
+        indeks = [
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_absensi_karyawan_tanggal ON absensi(karyawan_id, tanggal)",
+            "CREATE INDEX IF NOT EXISTS ix_absensi_tanggal ON absensi(tanggal)",
+            "CREATE INDEX IF NOT EXISTS ix_absensi_status ON absensi(status)",
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_lembur_absensi ON lembur(absensi_id)",
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_pengajuan_karyawan_tanggal ON pengajuan(karyawan_id, tanggal)",
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_pengajuan_absensi ON pengajuan(absensi_id) WHERE absensi_id IS NOT NULL",
+            "CREATE INDEX IF NOT EXISTS ix_pengajuan_tanggal ON pengajuan(tanggal)",
+            "CREATE INDEX IF NOT EXISTS ix_pengajuan_status ON pengajuan(status)",
+            "CREATE INDEX IF NOT EXISTS ix_karyawan_nama ON karyawan(nama)",
+            "CREATE INDEX IF NOT EXISTS ix_karyawan_status_aktif ON karyawan(status_aktif)",
+        ]
+        for perintah in indeks:
+            koneksi.execute(text(perintah))
+
+        # Database lama tidak bisa menerima foreign key baru melalui ALTER TABLE.
+        # Trigger ini menjaga relasi pengajuan -> absensi tetap valid.
+        koneksi.execute(text("""
+            CREATE TRIGGER IF NOT EXISTS trg_pengajuan_absensi_insert
+            BEFORE INSERT ON pengajuan
+            WHEN NEW.absensi_id IS NOT NULL
+             AND NOT EXISTS (SELECT 1 FROM absensi WHERE id = NEW.absensi_id)
+            BEGIN
+                SELECT RAISE(ABORT, 'absensi_id tidak valid');
+            END
+        """))
+        koneksi.execute(text("""
+            CREATE TRIGGER IF NOT EXISTS trg_pengajuan_absensi_update
+            BEFORE UPDATE OF absensi_id ON pengajuan
+            WHEN NEW.absensi_id IS NOT NULL
+             AND NOT EXISTS (SELECT 1 FROM absensi WHERE id = NEW.absensi_id)
+            BEGIN
+                SELECT RAISE(ABORT, 'absensi_id tidak valid');
+            END
+        """))
+        koneksi.execute(text("""
+            CREATE TRIGGER IF NOT EXISTS trg_absensi_hapus_pengajuan
+            AFTER DELETE ON absensi
+            BEGIN
+                UPDATE pengajuan SET absensi_id = NULL WHERE absensi_id = OLD.id;
+            END
+        """))
+
+
+with app.app_context():
+    siapkan_skema_database()
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    host = os.environ.get("ABSENSI_HOST", "127.0.0.1")
+    port = int(os.environ.get("ABSENSI_PORT", "5000"))
+    debug = os.environ.get("FLASK_DEBUG", "0") == "1"
+    app.run(host=host, port=port, debug=debug)

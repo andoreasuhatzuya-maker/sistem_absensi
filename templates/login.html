@@ -1,4 +1,51 @@
 <!DOCTYPE html>
-<html lang="id"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Login - Sistem Absensi</title>
-<style>*{box-sizing:border-box}body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#eef2f7;font-family:Arial,sans-serif;color:#1f2937}.box{width:100%;max-width:410px;background:#fff;padding:34px;border-radius:16px;box-shadow:0 12px 35px rgba(15,23,42,.1)}h1{text-align:center;margin:0 0 5px}.sub{text-align:center;color:#6b7280;font-size:13px;margin-bottom:25px}.field{margin-bottom:15px}.field label{display:block;font-size:13px;font-weight:700;margin-bottom:6px}.field input{width:100%;padding:12px;border:1px solid #d1d5db;border-radius:8px;font-size:14px}.btn{width:100%;padding:12px;background:#2563eb;border:0;color:white;border-radius:8px;font-weight:700;cursor:pointer}.error{background:#fee2e2;color:#991b1b;padding:11px;border-radius:8px;font-size:13px;margin-bottom:15px}.hint{text-align:center;color:#9ca3af;font-size:11px;margin-top:18px}</style></head>
-<body><div class="box"><h1>ABSENSI KARYAWAN</h1><div class="sub">Login Administrator</div>{% if error %}<div class="error">{{ error }}</div>{% endif %}<form method="POST"><div class="field"><label>Username</label><input name="username" required autofocus></div><div class="field"><label>Password</label><input type="password" name="password" required></div><button class="btn">Masuk</button></form><div class="hint">Gunakan akun admin yang sudah dibuat.</div></div></body></html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#245f9d">
+  <title>Masuk — Sistem Absensi</title>
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/logo-bsi.png') }}">
+  <link rel="apple-touch-icon" href="{{ url_for('static', filename='images/logo-bsi.png') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+</head>
+<body>
+  <div class="login-page">
+    <section class="login-panel">
+      <div class="login-box">
+        <div class="login-brand"><img class="brand-logo login-logo" src="{{ url_for('static', filename='images/logo-bsi.png') }}" alt="Logo Universitas Bina Sarana Informatika"><span>SISTEM ABSENSI</span></div>
+        <div class="eyebrow">Panel Administrator</div>
+        <h1>Selamat datang</h1>
+        <p class="sub">Masuk untuk mengelola kehadiran dan administrasi karyawan.</p>
+        {% if error %}<div class="flash error">{{ error }}</div>{% endif %}
+        <form method="POST">
+          <div class="field">
+            <label for="username">Username</label>
+            <input id="username" name="username" autocomplete="username" required autofocus>
+          </div>
+          <div class="field">
+            <label for="password">Password</label>
+            <input id="password" type="password" name="password" autocomplete="current-password" required>
+          </div>
+          <button class="btn" type="submit">Masuk ke Dashboard</button>
+        </form>
+        <div class="login-hint">Gunakan akun administrator yang telah terdaftar.</div>
+      </div>
+    </section>
+    <section class="login-visual" aria-hidden="true">
+      <div class="syllabus-preview">
+        <div class="eyebrow" style="color:#dceafa">Agenda Kehadiran</div>
+        <h2>Absensi yang lebih teratur.</h2>
+        <p>Ringkas, konsisten, dan mudah dibaca seperti lembar silabus.</p>
+        <div class="preview-table">
+          <div class="preview-row header"><span>No.</span><span>Agenda administrasi</span></div>
+          <div class="preview-row"><span>01</span><span>Data karyawan dan departemen</span></div>
+          <div class="preview-row"><span>02</span><span>Kehadiran harian</span></div>
+          <div class="preview-row"><span>03</span><span>Sakit, izin, dan lembur</span></div>
+          <div class="preview-row"><span>04</span><span>Rekap dan laporan periode</span></div>
+        </div>
+      </div>
+    </section>
+  </div>
+</body>
+</html>

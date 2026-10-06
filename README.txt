@@ -1,4 +1,4 @@
-SISTEM ABSENSI KARYAWAN - VERSI RAPi
+SISTEM ABSENSI KARYAWAN - TEMA SILABUS
 ====================================
 
 Fitur utama:
@@ -12,27 +12,76 @@ Fitur utama:
 - Laporan periode + PDF
 - Backup database .db
 - Pengaturan + ganti password admin
+- Antarmuka responsif bergaya lembar silabus
+- Relasi pengajuan dan absensi yang konsisten
+- Constraint unik dan index database untuk mencegah data ganda
 
-CARA MENJALANKAN DI WINDOWS
----------------------------
-1. Buka folder project di VS Code.
-2. Pastikan Python terpasang.
-3. Buka Terminal.
-4. Buat virtual environment jika belum ada:
-   python -m venv venv
-5. Aktifkan:
-   venv\Scripts\activate
-6. Install library:
-   pip install -r requirements.txt
-7. Jalankan:
-   python app.py
-8. Buka browser:
+MENJALANKAN DENGAN LARAGON (DIREKOMENDASIKAN)
+---------------------------------------------
+Project ini adalah aplikasi Python/Flask. Laragon dipakai sebagai lingkungan
+Windows dan penyedia Python, sedangkan web server aplikasinya dijalankan oleh
+Waitress pada port 5000. Apache dan MySQL Laragon boleh tetap menyala karena
+tidak memakai port yang sama.
+
+Persyaratan yang sudah didukung:
+- Laragon terpasang di C:\laragon.
+- Python tersedia melalui C:\laragon\bin\python\python-*.
+- Project boleh berada di C:\sistem_absensi atau dipindahkan ke
+  C:\laragon\www\sistem-absensi.
+
+Langkah menjalankan:
+1. Buka Laragon.
+2. Klik tombol Terminal di Laragon.
+3. Masuk ke folder project, contoh:
+   cd C:\sistem_absensi
+4. Jalankan:
+   run-laragon.bat
+5. Pada proses pertama, script otomatis:
+   - memilih Python bawaan Laragon;
+   - membuat virtual environment .venv;
+   - memasang library dari requirements.txt;
+   - menjalankan aplikasi melalui Waitress.
+6. Setelah muncul pesan server aktif, buka:
    http://127.0.0.1:5000
-9. Jika belum ada admin, buka sekali:
+7. Hentikan server dengan Ctrl+C pada Terminal Laragon.
+
+Port dapat diganti sebelum menjalankan script:
+   set ABSENSI_PORT=5050
+   run-laragon.bat
+
+Kemudian akses http://127.0.0.1:5050.
+
+PENTING:
+- Tombol Start All Laragon tidak otomatis menjalankan Flask. Jalankan
+  run-laragon.bat setiap kali aplikasi ingin digunakan.
+- Jangan menutup Terminal Laragon selama aplikasi sedang dipakai.
+- Untuk pemakaian di komputer lain dalam jaringan, ubah konfigurasi listener
+  secara sadar dan atur firewall. Konfigurasi bawaan hanya menerima koneksi
+  dari komputer ini agar lebih aman.
+
+LOGIN PERTAMA
+-------------
+Jika database masih baru dan belum mempunyai admin, buka satu kali:
    http://127.0.0.1:5000/buat-admin
-10. Login:
+
+Lalu login menggunakan:
    Username: admin
    Password: admin123
+
+Segera ganti password melalui menu Pengaturan.
+
+MENJALANKAN TANPA LARAGON
+-------------------------
+1. Buka Terminal pada folder project.
+2. Buat virtual environment:
+   python -m venv .venv
+3. Aktifkan:
+   .venv\Scripts\activate
+4. Install library:
+   python -m pip install -r requirements.txt
+5. Jalankan server pengembangan:
+   python app.py
+6. Buka http://127.0.0.1:5000.
 
 CATATAN DATABASE
 ----------------
@@ -41,6 +90,10 @@ instance/database.db
 
 Jika folder instance belum ada, Flask-SQLAlchemy akan membuatnya saat database dibuat.
 Jangan menghapus database.db jika ingin mempertahankan data lama.
+
+Saat aplikasi dijalankan, migrasi ringan akan menambahkan index, constraint unik,
+dan relasi pengajuan-absensi yang belum tersedia pada instalasi lama. Proses ini
+tidak menghapus data. Buat backup berkala lewat menu Pengaturan.
 
 PERUBAHAN PENTING
 -----------------
