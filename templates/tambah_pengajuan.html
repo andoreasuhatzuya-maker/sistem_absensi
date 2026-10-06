@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Tambah Sakit / Izin</title>
+
+<style>
+body{
+    margin:0;
+    font-family:Arial,sans-serif;
+    background:#f4f6f9;
+}
+
+.container{
+    max-width:650px;
+    margin:40px auto;
+    background:white;
+    padding:30px;
+    border-radius:10px;
+    box-shadow:0 2px 10px rgba(0,0,0,.08);
+}
+
+h1{
+    margin-top:0;
+}
+
+label{
+    display:block;
+    margin-top:15px;
+    margin-bottom:6px;
+    font-weight:bold;
+}
+
+select,
+input,
+textarea{
+    width:100%;
+    padding:11px;
+    border:1px solid #ccc;
+    border-radius:6px;
+    font-family:Arial,sans-serif;
+    box-sizing:border-box;
+}
+
+textarea{
+    resize:vertical;
+    min-height:100px;
+}
+
+button,
+a{
+    display:inline-block;
+    margin-top:20px;
+    padding:11px 16px;
+    border:none;
+    border-radius:6px;
+    text-decoration:none;
+    cursor:pointer;
+}
+
+button{
+    background:#2563eb;
+    color:white;
+}
+
+.kembali{
+    background:#6b7280;
+    color:white;
+}
+
+.error{
+    background:#fee2e2;
+    color:#991b1b;
+    padding:12px;
+    border-radius:6px;
+    margin-bottom:15px;
+}
+
+.info{
+    margin-top:15px;
+    padding:12px;
+    background:#eff6ff;
+    color:#1e40af;
+    border-radius:6px;
+    font-size:14px;
+}
+</style>
+
+</head>
+
+<body>
+
+<div class="container">
+
+<h1>Tambah Sakit / Izin</h1>
+
+<p>Masukkan data sakit atau izin karyawan.</p>
+
+{% if error %}
+<div class="error">
+    ⚠️ {{ error }}
+</div>
+{% endif %}
+
+<form method="POST" enctype="multipart/form-data">
+
+<label>Karyawan</label>
+
+<select name="karyawan_id" required>
+
+<option value="">
+-- Pilih Karyawan --
+</option>
+
+{% for karyawan in daftar_karyawan %}
+
+<option value="{{ karyawan.id }}">
+{{ karyawan.nik }} - {{ karyawan.nama }} - {{ karyawan.jabatan }}
+</option>
+
+{% endfor %}
+
+</select>
+
+
+<label>Tanggal</label>
+
+<input
+    type="date"
+    name="tanggal"
+    required
+>
+
+
+<label>Jenis Pengajuan</label>
+
+<select name="jenis" id="jenis" required>
+
+<option value="">
+-- Pilih Jenis --
+</option>
+
+<option value="Sakit">
+Sakit
+</option>
+
+<option value="Izin">
+Izin
+</option>
+
+</select>
+
+
+<label>Alasan / Keterangan</label>
+
+<textarea
+    name="alasan"
+    placeholder="Contoh: Demam dan tidak dapat masuk kerja."
+    required
+></textarea>
+
+
+<label>Bukti</label>
+
+<input
+    type="file"
+    name="bukti"
+    id="bukti"
+    accept=".pdf,.jpg,.jpeg,.png"
+>
+
+<div class="info">
+
+<b>Jika Sakit:</b><br>
+
+Bukti wajib dilampirkan, misalnya:
+<ul>
+<li>Surat dokter</li>
+<li>Resep obat</li>
+<li>Bukti pembelian obat</li>
+<li>Dokumen pendukung lainnya</li>
+</ul>
+
+<b>Jika Izin:</b><br>
+
+Bukti bersifat opsional.
+
+<br><br>
+
+Format:
+<b>PDF, JPG, JPEG, PNG</b>
+
+<br>
+
+Maksimal:
+<b>10 MB</b>
+
+</div>
+
+
+<button type="submit">
+Simpan Pengajuan
+</button>
+
+<a
+    href="{{ url_for('pengajuan') }}"
+    class="kembali"
+>
+Batal
+</a>
+
+</form>
+
+</div>
+
+
+<script>
+
+const jenis = document.getElementById("jenis");
+const bukti = document.getElementById("bukti");
+
+function cekBukti() {
+
+    if (jenis.value === "Sakit") {
+
+        bukti.required = true;
+
+    } else {
+
+        bukti.required = false;
+
+    }
+
+}
+
+jenis.addEventListener(
+    "change",
+    cekBukti
+);
+
+cekBukti();
+
+</script>
+
+</body>
+
+</html>

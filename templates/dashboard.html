@@ -1,0 +1,15 @@
+{% extends 'base.html' %}{% block title %}Dashboard - Absensi{% endblock %}
+{% block content %}
+<div class="topbar"><div><h1>Dashboard</h1><div class="muted">Ringkasan kehadiran {{ hari_ini.strftime('%d-%m-%Y') }}</div></div><div class="actions"><a class="btn" href="{{ url_for('absensi', tanggal=hari_ini.isoformat()) }}">📋 Kelola Absensi Hari Ini</a></div></div>
+<div class="card-grid">
+<div class="card total"><div class="label">Karyawan Aktif</div><div class="number">{{ total_karyawan }}</div></div>
+<div class="card masuk"><div class="label">Masuk</div><div class="number">{{ total_masuk }}</div></div>
+<div class="card sakit"><div class="label">Sakit</div><div class="number">{{ total_sakit }}</div></div>
+<div class="card izin"><div class="label">Izin</div><div class="number">{{ total_izin }}</div></div>
+<div class="card tidak"><div class="label">Tidak Masuk</div><div class="number">{{ total_tidak_masuk }}</div></div>
+</div>
+<div class="panel"><div class="panel-head"><h2>Absensi Hari Ini</h2><div class="stat-row"><div class="stat">Belum diinput: <b>{{ total_belum }}</b></div><div class="stat">Total aktif: <b>{{ total_karyawan }}</b></div></div></div>
+<div class="table-wrap"><table><thead><tr><th>No</th><th>NIK</th><th>Nama</th><th>Jabatan</th><th>Status</th><th>Masuk</th><th>Pulang</th></tr></thead><tbody>
+{% for item in absensi_hari_ini %}<tr><td>{{ loop.index }}</td><td>{{ item.karyawan.nik }}</td><td><b>{{ item.karyawan.nama }}</b></td><td>{{ item.karyawan.jabatan }}</td><td><span class="badge {% if item.status=='Masuk' %}masuk{% elif item.status=='Sakit' %}sakit{% elif item.status=='Izin' %}izin{% elif item.status=='Tidak Masuk' %}tidak{% else %}belum{% endif %}">{{ item.status }}</span></td><td>{{ item.jam_masuk.strftime('%H:%M') if item.jam_masuk else '-' }}</td><td>{{ item.jam_pulang.strftime('%H:%M') if item.jam_pulang else '-' }}</td></tr>{% else %}<tr><td colspan="7" class="empty">Belum ada karyawan aktif.</td></tr>{% endfor %}
+</tbody></table></div></div>
+{% endblock %}

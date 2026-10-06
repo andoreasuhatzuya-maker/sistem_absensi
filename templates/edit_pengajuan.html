@@ -1,0 +1,247 @@
+{% extends 'base.html' %}
+
+{% block title %}Edit Sakit / Izin - Absensi{% endblock %}
+
+{% block content %}
+
+<div class="topbar">
+
+    <div>
+        <h1>Edit Sakit / Izin</h1>
+        <div class="muted">
+            Perbaiki data pengajuan dan bukti pendukung.
+        </div>
+    </div>
+
+</div>
+
+
+<div class="panel">
+
+    {% if error %}
+    <div class="flash error" style="margin-bottom:15px;">
+        ⚠️ {{ error }}
+    </div>
+    {% endif %}
+
+
+    <form method="POST" enctype="multipart/form-data">
+
+        <div class="form-grid">
+
+
+            <!-- KARYAWAN -->
+
+            <div class="field full">
+
+                <label>Karyawan *</label>
+
+                <select name="karyawan_id" required>
+
+                    {% for k in daftar_karyawan %}
+
+                    <option
+                        value="{{ k.id }}"
+                        {% if k.id == pengajuan.karyawan_id %}
+                        selected
+                        {% endif %}
+                    >
+
+                        {{ k.nik }} - {{ k.nama }}
+
+                    </option>
+
+                    {% endfor %}
+
+                </select>
+
+            </div>
+
+
+            <!-- TANGGAL -->
+
+            <div class="field">
+
+                <label>Tanggal *</label>
+
+                <input
+                    type="date"
+                    name="tanggal"
+                    value="{{ pengajuan.tanggal.isoformat() }}"
+                    required
+                >
+
+            </div>
+
+
+            <!-- JENIS -->
+
+            <div class="field">
+
+                <label>Jenis Pengajuan *</label>
+
+                <select
+                    name="jenis"
+                    id="jenis"
+                    required
+                >
+
+                    <option
+                        value="Sakit"
+                        {% if pengajuan.jenis == "Sakit" %}
+                        selected
+                        {% endif %}
+                    >
+                        Sakit
+                    </option>
+
+                    <option
+                        value="Izin"
+                        {% if pengajuan.jenis == "Izin" %}
+                        selected
+                        {% endif %}
+                    >
+                        Izin
+                    </option>
+
+                </select>
+
+            </div>
+
+
+            <!-- ALASAN -->
+
+            <div class="field full">
+
+                <label>Alasan / Keterangan *</label>
+
+                <textarea
+                    name="alasan"
+                    required
+                    rows="5"
+                >{{ pengajuan.alasan or '' }}</textarea>
+
+            </div>
+
+
+            <!-- BUKTI LAMA -->
+
+            <div class="field full">
+
+                <label>Bukti</label>
+
+                {% if pengajuan.bukti %}
+
+                    <div style="
+                        padding:12px;
+                        background:#f3f4f6;
+                        border-radius:8px;
+                        margin-bottom:10px;
+                    ">
+
+                        <b>Bukti saat ini:</b>
+
+                        <br>
+
+                        <a
+                            href="{{ url_for('lihat_bukti', id=pengajuan.id) }}"
+                            target="_blank"
+                        >
+                            Lihat bukti
+                        </a>
+
+                    </div>
+
+                {% else %}
+
+                    <div class="muted" style="margin-bottom:10px;">
+                        Belum ada bukti.
+                    </div>
+
+                {% endif %}
+
+
+                <label style="font-weight:normal;">
+                    Ganti bukti
+                </label>
+
+                <input
+                    type="file"
+                    name="bukti"
+                    id="bukti"
+                    accept=".pdf,.jpg,.jpeg,.png"
+                >
+
+                <div class="muted" style="margin-top:8px;">
+                    Format: PDF, JPG, JPEG, PNG.
+                    Maksimal 10 MB.
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <div class="form-actions">
+
+            <button
+                type="submit"
+                class="btn"
+            >
+                Simpan Perubahan
+            </button>
+
+            <a
+                class="btn gray"
+                href="{{ url_for('pengajuan') }}"
+            >
+                Batal
+            </a>
+
+        </div>
+
+    </form>
+
+</div>
+
+
+<script>
+
+const jenis = document.getElementById("jenis");
+const bukti = document.getElementById("bukti");
+
+function cekBukti() {
+
+    /*
+     * Kalau Sakit dan belum punya bukti,
+     * upload dibuat wajib.
+     */
+
+    {% if not pengajuan.bukti %}
+
+    if (jenis.value === "Sakit") {
+        bukti.required = true;
+    } else {
+        bukti.required = false;
+    }
+
+    {% else %}
+
+    /*
+     * Sudah punya bukti lama,
+     * jadi upload baru tidak wajib.
+     */
+
+    bukti.required = false;
+
+    {% endif %}
+
+}
+
+jenis.addEventListener("change", cekBukti);
+
+cekBukti();
+
+</script>
+
+{% endblock %}

@@ -1,0 +1,23 @@
+{% extends 'base.html' %}{% block title %}Sakit / Izin - Absensi{% endblock %}{% block content %}<div class="topbar"><div><h1>Sakit / Izin</h1><div class="muted">Catatan pengajuan dan bukti pendukung karyawan.</div></div><div class="actions"><a class="btn" href="{{ url_for('tambah_pengajuan') }}">+ Tambah Pengajuan</a></div></div><div class="panel"><div class="table-wrap"><table><thead><tr><th>No</th><th>Tanggal</th><th>NIK</th><th>Nama</th><th>Jenis</th><th>Alasan</th><th>Bukti</th><th>Status</th><th>Aksi</th></tr></thead><tbody>{% for p in daftar_pengajuan %}<tr><td>{{ loop.index }}</td><td class="nowrap">{{ p.tanggal.strftime('%d-%m-%Y') }}</td><td>{{ p.karyawan.nik }}</td><td><b>{{ p.karyawan.nama }}</b></td><td><span class="badge {% if p.jenis=='Sakit' %}sakit{% else %}izin{% endif %}">{{ p.jenis }}</span></td><td>{{ p.alasan }}</td><td>{% if p.bukti %}<a class="btn small" target="_blank" href="{{ url_for('lihat_bukti', id=p.id) }}">Lihat</a> <a class="btn small light" href="{{ url_for('download_bukti', id=p.id) }}">Download</a>{% else %}<span class="subtle">Tidak ada</span>{% endif %}</td><td><span class="badge aktif">{{ p.status }}</span></td><td>
+    <div style="display:flex; gap:6px; flex-wrap:wrap;">
+
+        <a
+            class="btn small"
+            href="{{ url_for('edit_pengajuan', id=p.id) }}"
+        >
+            Edit
+        </a>
+
+        <form
+            method="POST"
+            action="{{ url_for('hapus_pengajuan', id=p.id) }}"
+            onsubmit="return confirm('Hapus pengajuan ini? Data absensi tidak ikut dihapus.')"
+            style="margin:0;"
+        >
+            <button class="btn small red">
+                Hapus
+            </button>
+        </form>
+
+    </div>
+</td></tr>{% else %}<tr><td colspan="9" class="empty">Belum ada pengajuan.</td></tr>{% endfor %}</tbody></table></div></div>{% endblock %}
